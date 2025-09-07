@@ -5,7 +5,7 @@ const API_URL = '/api';
 let currentSessionId = null;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, totalCourses, courseTitles, newChatButton;
+let chatMessages, chatInput, sendButton, totalCourses, courseTitles, newChatButton, themeToggle;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,8 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
     newChatButton = document.getElementById('newChatButton');
+    themeToggle = document.getElementById('themeToggle');
     
     setupEventListeners();
+    initializeTheme();
     createNewSession();
     loadCourseStats();
 });
@@ -32,6 +34,17 @@ function setupEventListeners() {
     
     // New chat button
     newChatButton.addEventListener('click', startNewChat);
+    
+    // Theme toggle button
+    themeToggle.addEventListener('click', toggleTheme);
+    
+    // Keyboard navigation for theme toggle
+    themeToggle.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleTheme();
+        }
+    });
     
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
@@ -183,6 +196,101 @@ function startNewChat() {
     
     // Focus on input field
     chatInput.focus();
+}
+
+// Theme Functions
+function initializeTheme() {
+    // Check for saved theme preference, system preference, or default to 'dark'
+    let savedTheme = localStorage.getItem('theme');
+    
+    // If no saved preference, detect system preference
+    if (!savedTheme) {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            savedTheme = 'light';
+        } else {
+            savedTheme = 'dark';
+        }
+    }
+    
+    applyTheme(savedTheme);
+    
+    // Listen for system theme changes
+    if (window.matchMedia) {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+        const handleSystemThemeChange = (e) => {
+            // Only auto-switch if user hasn't manually set a preference
+            if (!localStorage.getItem('theme')) {
+                applyTheme(e.matches ? 'light' : 'dark');
+            }
+        };
+        
+        // Use modern addEventListener if available, fallback to addListener
+        if (mediaQuery.addEventListener) {
+            mediaQuery.addEventListener('change', handleSystemThemeChange);
+        } else {
+            mediaQuery.addListener(handleSystemThemeChange);
+        }
+    }
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    // Prevent rapid clicking during transition
+    if (document.body.classList.contains('theme-transitioning')) {
+        return;
+    }
+    
+    // Add transition class for smooth theme switching
+    document.body.classList.add('theme-transitioning');
+    
+    // Add visual feedback to button
+    if (themeToggle) {
+        themeToggle.style.transform = 'scale(0.9)';
+        themeToggle.disabled = true;
+    }
+    
+    // Apply the new theme
+    applyTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    // Remove transition class and restore button after animation completes
+    setTimeout(() => {
+        document.body.classList.remove('theme-transitioning');
+        if (themeToggle) {
+            themeToggle.style.transform = '';
+            themeToggle.disabled = false;
+        }
+    }, 300);
+}
+
+function applyTheme(theme) {
+    const root = document.documentElement;
+    
+    // Use requestAnimationFrame for smooth visual updates
+    requestAnimationFrame(() => {
+        // Set data-theme attribute instead of class
+        root.setAttribute('data-theme', theme);
+        
+        // Also set on body for additional styling flexibility
+        document.body.setAttribute('data-theme', theme);
+        
+        // Update aria-pressed attribute for accessibility
+        if (themeToggle) {
+            themeToggle.setAttribute('aria-pressed', theme === 'light');
+            
+            // Update button title for better user feedback
+            themeToggle.setAttribute('title', 
+                theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'
+            );
+            
+            // Update aria-label for screen readers
+            themeToggle.setAttribute('aria-label', 
+                theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'
+            );
+        }
+    });
 }
 
 // Load course statistics
