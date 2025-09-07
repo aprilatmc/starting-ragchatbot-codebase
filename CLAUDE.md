@@ -23,6 +23,35 @@ uv sync
 uv add <package-name>
 ```
 
+### Code Quality Tools
+
+#### Formatting and Linting
+```bash
+# Format code with black and organize imports with isort
+./scripts/format.sh
+
+# Run all quality checks (flake8, mypy, formatting)
+./scripts/lint.sh
+
+# Run tests with quality checks
+./scripts/test.sh
+```
+
+#### Individual Tools
+```bash
+# Format code
+uv run black backend/ main.py
+
+# Organize imports
+uv run isort backend/ main.py
+
+# Check code style
+uv run flake8 backend/ main.py --max-line-length=88 --extend-ignore=E203,W503
+
+# Type checking
+uv run mypy backend/ main.py
+```
+
 The application runs on:
 - Web Interface: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
