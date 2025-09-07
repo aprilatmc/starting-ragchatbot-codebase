@@ -19,6 +19,7 @@ dependencies = [
     "flake8>=7.0.0",
     "isort>=5.13.0",
     "mypy>=1.8.0",
+    "httpx>=0.27.0",
 ]
 
 [tool.black]
@@ -68,3 +69,22 @@ module = [
     "sentence_transformers.*",
 ]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "-v",
+    "--disable-warnings"
+]
+markers = [
+    "unit: marks tests as unit tests (isolated component testing)",
+    "integration: marks tests as integration tests (multiple components)",
+    "api: marks tests as API endpoint tests",
+    "slow: marks tests as slow running"
+]
+asyncio_mode = "auto"
