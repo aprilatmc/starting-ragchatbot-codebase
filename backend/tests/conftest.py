@@ -2,6 +2,10 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 import sys
 import os
+import tempfile
+from typing import AsyncGenerator
+from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 # Add backend directory to Python path so we can import modules
 backend_path = os.path.dirname(os.path.abspath(__file__)).replace('/tests', '')
@@ -143,3 +147,155 @@ def mock_final_response():
     mock_response = Mock()
     mock_response.content = [Mock(text="Here's what I found about test query...")]
     return mock_response
+
+
+# API Testing Fixtures
+
+@pytest.fixture
+def temp_frontend_dir():
+    """Create a temporary frontend directory for testing"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create basic files to avoid static file mounting errors
+        frontend_path = os.path.join(temp_dir, "frontend")
+        os.makedirs(frontend_path)
+        
+        # Create a basic index.html
+        with open(os.path.join(frontend_path, "index.html"), "w") as f:
+            f.write("<html><body>Test Frontend</body></html>")
+            
+        yield frontend_path
+
+
+@pytest.fixture
+def test_app(temp_frontend_dir):
+    """Create a test FastAPI app instance"""
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.staticfiles import StaticFiles
+    from pydantic import BaseModel
+    from typing import List, Optional, Union, Dict, Any
+    
+    # Define models inline to avoid importing from app.py (which mounts static files)
+    class QueryRequest(BaseModel):
+        """Request model for course queries"""
+        query: str
+        session_id: Optional[str] = None
+
+    class QueryResponse(BaseModel):
+        """Response model for course queries"""
+        answer: str
+        sources: List[Union[str, Dict[str, Any]]]
+        session_id: str
+
+    class CourseStats(BaseModel):
+        """Response model for course statistics"""
+        total_courses: int
+        course_titles: List[str]
+    
+    # Create test app without mounting problematic static files in production
+    test_app = FastAPI(title="Test RAG System")
+    
+    # Add CORS middleware
+    test_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Mock RAG system for testing
+    mock_rag_system = Mock()
+    
+    @test_app.post("/api/query", response_model=QueryResponse)
+    async def query_documents(request: QueryRequest):
+        """Test endpoint for document queries"""
+        try:
+            session_id = request.session_id or "test_session"
+            answer, sources = mock_rag_system.query(request.query, session_id)
+            
+            return QueryResponse(
+                answer=answer,
+                sources=sources,
+                session_id=session_id
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @test_app.get("/api/courses", response_model=CourseStats)
+    async def get_course_stats():
+        """Test endpoint for course statistics"""
+        try:
+            analytics = mock_rag_system.get_course_analytics()
+            return CourseStats(
+                total_courses=analytics["total_courses"],
+                course_titles=analytics["course_titles"]
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @test_app.get("/")
+    async def root():
+        """Test root endpoint"""
+        return {"message": "RAG System API"}
+    
+    # Store mock for access in tests
+    test_app.state.mock_rag_system = mock_rag_system
+    
+    return test_app
+
+
+@pytest.fixture
+def test_client(test_app):
+    """Create a test client for synchronous testing"""
+    return TestClient(test_app)
+
+
+@pytest.fixture
+async def async_test_client(test_app) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client for async testing"""
+    from httpx import ASGITransport
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+@pytest.fixture
+def mock_rag_system(test_app):
+    """Access the mock RAG system from the test app"""
+    return test_app.state.mock_rag_system
+
+
+@pytest.fixture
+def sample_query_request():
+    """Sample query request for testing"""
+    return {
+        "query": "What is machine learning?",
+        "session_id": "test_session_123"
+    }
+
+
+@pytest.fixture
+def sample_query_response():
+    """Sample query response for testing"""
+    return {
+        "answer": "Machine learning is a subset of artificial intelligence...",
+        "sources": [
+            {"text": "ML Course - Introduction", "link": "http://example.com/ml/intro"},
+            {"text": "ML Course - Fundamentals", "link": "http://example.com/ml/fundamentals"}
+        ],
+        "session_id": "test_session_123"
+    }
+
+
+@pytest.fixture
+def sample_course_analytics():
+    """Sample course analytics for testing"""
+    return {
+        "total_courses": 3,
+        "course_titles": [
+            "Introduction to Machine Learning",
+            "Advanced Python Programming", 
+            "Data Structures and Algorithms"
+        ]
+    }
